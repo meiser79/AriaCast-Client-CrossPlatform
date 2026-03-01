@@ -50,16 +50,7 @@ A modern, cross-platform client for AriaCast built with Go and Webview.
 
 1.  Start the **AriaCast Server** on the host machine.
 2.  Run the **AriaCast Client**.
-3.  The client will automatically discover the server on the local network or you can enter the IP manually.
+3.  The client will automatically discover the server on the local network.
 4.  **Windows**: For best results, install **VB-Cable** and set it as your default playback device to stream system audio silently.
 
-## Configuration
 
-The client uses `ariacast_config.json` to store settings:
-```json
-{
-  "server_ip": "192.168.1.100",
-  "port": 8080
-}
-```
-This file is automatically created/updated.
