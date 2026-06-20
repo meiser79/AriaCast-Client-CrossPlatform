@@ -2,9 +2,24 @@
 
 package main
 
+/*
+#cgo pkg-config: gtk+-3.0
+
+#include <gtk/gtk.h>
+
+static void ariacastMinimize(void* wnd) {
+    gtk_window_iconify(GTK_WINDOW(wnd));
+}
+*/
+import "C"
+
 import (
+	"bytes"
 	"embed"
+	"image"
+	_ "image/png"
 	"log"
+	"os"
 
 	"github.com/gen2brain/malgo"
 	webview "github.com/webview/webview_go"
@@ -27,16 +42,34 @@ func getPlatformDeviceConfig() malgo.DeviceConfig {
 	return deviceConfig
 }
 
-// Window Methods specific to Linux (No-op or different implementation as needed)
+// Window Methods specific to Linux
 func (b *Binding) Minimize() {
-	// Linux webview implementation limitations might prevent direct minimize control easily without CGO/GTK calls
+	if w != nil {
+		w.Dispatch(func() {
+			C.ariacastMinimize(w.Window())
+		})
+	}
 }
 
 func (b *Binding) StartDrag() {
-	// Linux window dragging - usually handled by Window Manager if decorated
+	// Dragging a borderless window from a custom header needs the live GDK
+	// button-press event (coordinates + timestamp) which isn't available
+	// anymore by the time this JS->Go binding call runs. Left as a no-op;
+	// the window keeps its normal WM decorations so it can still be moved
+	// by the OS title bar.
 }
 
 func main() {
+	// WebKitGTK's accelerated compositing (used for things like the CSS
+	// backdrop-filter blur in ui/index.html) is known to break pointer-event
+	// hit-testing on some GPU/driver/Wayland combinations: the UI renders
+	// fine but clicks and slider drags are silently swallowed. Disabling
+	// compositing fixes that and costs nothing visually for this simple UI.
+	// Respect an explicit override (e.g. set by the user in their shell).
+	if _, set := os.LookupEnv("WEBKIT_DISABLE_COMPOSITING_MODE"); !set {
+		os.Setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+	}
+
 	debug := true
 	w = webview.New(debug)
 	defer w.Destroy()
@@ -44,10 +77,31 @@ func main() {
 	w.SetTitle("AriaCast - Linux Client")
 	w.SetSize(450, 600, webview.HintNone)
 
+	// Set the window icon from the embedded PNG so it shows in the taskbar,
+	// window switcher (Alt+Tab), and the WM title bar.
+	iconData, err := uiFS.ReadFile("ui/icon.png")
+	if err != nil {
+		log.Printf("Could not load icon: %v", err)
+	} else if len(iconData) == 0 {
+		log.Printf("Icon file is empty, skipping")
+	} else {
+		img, _, err := image.Decode(bytes.NewReader(iconData))
+		if err != nil {
+			log.Printf("Could not decode icon: %v", err)
+		} else {
+			w.Dispatch(func() {
+				w.SetIcon(img, webview.IconKindDefault)
+			})
+		}
+	}
+
 	// Bindings
 	w.Bind("startStream", func() { (&Binding{}).Start() })
 	w.Bind("stopStream", func() { (&Binding{}).Stop() })
 	w.Bind("setVolume", func(v float64) { (&Binding{}).SetVolume(v) })
+	w.Bind("appMinimize", func() { (&Binding{}).Minimize() })
+	w.Bind("appClose", func() { (&Binding{}).Close() })
+	w.Bind("startDrag", func() { (&Binding{}).StartDrag() })
 
 	// Linux might not support borderless dragging easily in webview without more complex GTK logic
 	// So we keep standard decorations (HintNone) or use HintFixed if we want non-resizable.

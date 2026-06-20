@@ -43,6 +43,9 @@ func main() {
 	w.Bind("startStream", func() { (&Binding{}).Start() })
 	w.Bind("stopStream", func() { (&Binding{}).Stop() })
 	w.Bind("setVolume", func(v float64) { (&Binding{}).SetVolume(v) })
+	w.Bind("appMinimize", func() { (&Binding{}).Minimize() })
+	w.Bind("appClose", func() { (&Binding{}).Close() })
+	w.Bind("startDrag", func() { (&Binding{}).StartDrag() })
 
 	htmlContent, err := uiFS.ReadFile("ui/index.html")
 	if err != nil {
